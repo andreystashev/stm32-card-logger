@@ -38,7 +38,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define UART_SPEED 460800
-#define BUFSIZE 420//есть предположение что прерывание срабатывает каждые 42 байта, увеличил в 20 для проверки(предположительно не влиеяет)
+#define BUFSIZE 420
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -59,7 +59,6 @@ UART_HandleTypeDef huart3;
 DMA_HandleTypeDef hdma_usart1_rx;
 DMA_HandleTypeDef hdma_usart1_tx;
 DMA_HandleTypeDef hdma_usart3_rx;
-DMA_HandleTypeDef hdma_usart3_tx;
 
 /* USER CODE BEGIN PV */
 
@@ -108,14 +107,14 @@ char *fn;
 DIR dir;
 DWORD fre_clust, fre_sect, tot_sect;
 
-uint8_t fullMessageBuffer[800] = {0,};//массив большой для всех сообщений с запасом. был 400 увеличил в 2 раза для проверки
+uint8_t fullMessageBuffer[800] = {0,};//массив для всех сообщений с запасом.
 uint8_t *pfullMessageBuffer = fullMessageBuffer;
-uint16_t fullMessageLength = 0; // сюда длину сообщения из заголовка пишем
+uint16_t fullMessageLength = 0; // длина сообщения из заголовка
 int headerSwitcher = 1; // переключатель чтения заголовка/тела пакета
 int lighterSwitcher = 1; // переключатель светодиода
-uint16_t addressMessage = 0; // тут адрес пишем и смотрим бит для пр
-uint8_t statusMessage[8]={0x3A,0x01,0x00,0x07,0x00,0x00,0x40,0x89};//массив с положительным статусом
-uint8_t nothingToSendMessage[8]={0x3A,0x01,0x00,0x01,0x00,0x00,0x41,0x69};//массив с положительным статусом
+uint16_t addressMessage = 0; // проверка адреса
+uint8_t helloCommand[8]={0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08};//массив с положительным статусом
+uint8_t testCommand[8]={0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x01};//массив с положительным статусом
 int rewriteCounterCLoseFile = 0;
 
 uint8_t rewriteMessagesBuffer[3400] = {0,};//massive for rewrite many messages
@@ -168,8 +167,6 @@ FRESULT ReadLongFile(void)
 
 void rewrite(const void* buff,int size)
 {
-    //write
-    
     
     if(f_mount(&SDFatFs,(TCHAR const*)USERPath,0)!=FR_OK)
     {
@@ -184,25 +181,17 @@ void rewrite(const void* buff,int size)
         else
         {
             rewriteMessagesCounter = 0;
-            //	    	uint8_t t[8]="Hello";
-            //			res = f_write(&MyFile,t,sizeof(t),(void*)&byteswritten);
-            //	    	res = f_lseek(&MyFile, f_size(&MyFile));
-            //	    	res = f_write(&MyFile,"\r\n",2,(void*)&byteswritten);
+
             res = f_lseek(&MyFile, f_size(&MyFile));
             
             res = f_write(&MyFile,buff,size,(void*)&byteswritten);
-            //			HAL_UART_Transmit(&huart3 , "WRITE", 6,10 );
-            
-            //	    	res = f_write(&MyFile,t,sizeof(t),(void*)&byteswritten);
+
             
             if((byteswritten==0)||(res!=FR_OK))
             {
                 Error_Handler();
             }
-            //закрываем файл не всегда а спустя 20 записей переключаем светодиод
-            //	      rewriteCounterCLoseFile+=1;
-            //	      if(rewriteCounterCLoseFile==6){
-            //	    	  rewriteCounterCLoseFile=0;
+  
             if(lighterSwitcher==1)
             {
                 HAL_GPIO_WritePin(parachute_GPIO_Port, parachute_Pin, GPIO_PIN_SET);
@@ -215,10 +204,7 @@ void rewrite(const void* buff,int size)
             }
             
             f_close(&MyFile);
-            
-            //	      }
-            //	      f_close(&MyFile);
-            
+
         }
     }
 }
@@ -336,18 +322,11 @@ void send_file_over_uart2(const char* filename) {
         }
         bytes_sent += bytes_read;
         //    snprintf(bytes_sent, sizeof(bytes_sent), "%lu", bytes_sent);
-        
         //    printf("Sent %d bytes\r\n", bytes_sent); // Отладочный вывод
         char sent_buffer[32]; // Создаем буфер для хранения отформатированной строки
         snprintf(sent_buffer, sizeof(sent_buffer), "Sent %d bytes\r\n", bytes_sent); // Форматируем строку и сохраняем ее в буфер
         HAL_UART_Transmit(&huart2, (uint8_t*)sent_buffer, strlen(sent_buffer), 10);
-        //    if (HAL_UART_Transmit(&huart2, (uint8_t *)sent_buffer, strlen(sent_buffer), HAL_MAX_DELAY) != HAL_OK) {
-        //      // Обработка ошибки передачи данных
-        //      break;
-        //    }
     }
-    
-    // Закрываем файл
     f_close(&file);
     char *error5 = "all good! Data transmited";
     HAL_UART_Transmit(&huart2, (uint8_t *)error5, strlen(error5), 10);
@@ -410,8 +389,8 @@ void fileTransfer()
 
 /* USER CODE END 0 */
 uint8_t str[BUFSIZE+1];
-uint8_t dataReceived=0; // признак данное получено
-uint8_t dataTransmitted=1; // признак данное передано
+uint8_t dataReceived=0;
+uint8_t dataTransmitted=1;
 /**
  * @brief  The application entry point.
  * @retval int
@@ -421,7 +400,7 @@ uint8_t dataTransmitted=1; // признак данное передано
 void waitedRewrite()
 {
     
-    if(rewriteMessagesCounter>=500)//влияет на частоту вызова функции
+    if(rewriteMessagesCounter>=500)
     {
         if(lighterSwitcher==1)
         {
@@ -480,9 +459,9 @@ int main(void)
     HAL_NVIC_EnableIRQ(USART2_IRQn);
     //SD_PowerOn();
     //sd_ini()
-    //  HAL_UART_Transmit(&huart3 , statusMessage, 8,10 );//отправляем статус ок
-    //  HAL_UART_Transmit(&huart2 , statusMessage, 8,10 );//отправляем статус ок
-    //  HAL_UART_Transmit(&huart1 , statusMessage, 8,10 );//отправляем статус ок
+    //  HAL_UART_Transmit(&huart3 , helloCommand, 8,10 );//отправляем приветствие
+    //  HAL_UART_Transmit(&huart2 , helloCommand, 8,10 );//отправляем приветствие
+    //  HAL_UART_Transmit(&huart1 , helloCommand, 8,10 );//отправляем приветствие
     
     disk_initialize(SDFatFs.drv);
     
@@ -511,7 +490,6 @@ int main(void)
     
     headerSwitcher = 1;
     lighterSwitcher = 1;
-    //  HAL_UART_Receive_IT (&huart2, fullMessageBuffer, 42);//приходят данные сюда записываются в массив стр на размер буфера
     
     HAL_UART_Receive_IT (&huart2, pfullMessageBuffer, 6);//приходят данные сюда записываются в массив стр на размер буфера
     
@@ -523,23 +501,6 @@ int main(void)
     /* USER CODE BEGIN WHILE */
     while (1)
     {
-        //	  HAL_UART_Transmit(&huart2 , statusMessage, 8,10 );//отправляем статус ок
-        //	  HAL_Delay(700);
-        //	  HAL_GPIO_WritePin(parachute_GPIO_Port, parachute_Pin, GPIO_PIN_SET);
-        //	  char *message34 = "uart2 work";
-        //	  HAL_UART_Transmit(&huart2, (uint8_t *)message34, strlen(message34), 10);
-        //	  char *message345 = "uart1 work";
-        //	  HAL_UART_Transmit(&huart1, (uint8_t *)message345, strlen(message345), 10);
-        //	  char *message35 = "uart3 work";
-        //	  HAL_UART_Transmit(&huart3, (uint8_t *)message35, strlen(message35), 10);
-        
-        //	  HAL_Delay(700);
-        //	  HAL_GPIO_WritePin(parachute_GPIO_Port, parachute_Pin, GPIO_PIN_RESET);
-        
-        //	  waitedRewrite();
-        //	  waitedRewrite();
-        
-        //	  HAL_Delay(300);//влияет на внезапные остановки на больших скоростях
         
         /* USER CODE END WHILE */
         
@@ -570,48 +531,41 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             bool prBit = addressMessage & 0x20;
             if(prBit)
             {
-                bool statusByte = pfullMessageBuffer[3]==0x06;
-                bool retranslateByte = pfullMessageBuffer[3]==0x03;
-                bool transmittedByte = pfullMessageBuffer[3]==0x05;
+                bool helloCommand = pfullMessageBuffer[3]==0x01;
+                bool secondCommand = pfullMessageBuffer[3]==0x02;
+                bool thirdCommand = pfullMessageBuffer[3]==0x03;
                 
                 
-                if(statusByte)
+                if(helloCommand)
                 {
                     
-                    HAL_UART_Transmit(&huart2 , statusMessage, 8,10);//отправляем статус ок
+                    HAL_UART_Transmit(&huart2 , helloCommand, 8,10);//отправляем приветствие
                     for(int z=0;z<fullMessageLength+2+6;++z)
                     {
                         rewriteMessagesBuffer[z+rewriteMessagesCounter]=fullMessageBuffer[z];
                     }
                     for(int z=0;z<8;++z)
                     {
-                        rewriteMessagesBuffer[z+rewriteMessagesCounter]=statusMessage[z];
+                        rewriteMessagesBuffer[z+rewriteMessagesCounter]=helloCommand[z];
                     }
                     rewriteMessagesCounter+=fullMessageLength+2+6+8;
                     
-                    // waitedRewrite();
-                    //				  rewrite(statusMessage, 8);
-                    //				  rewrite(fullMessageBuffer, fullMessageLength+2+6);
                 }
-                else if(retranslateByte)
+                else if(secondCommand)
                 {
                     HAL_UART_Transmit(&huart2 , pfullMessageBuffer, fullMessageLength+2+6,10);
-                    //				  HAL_UART_Transmit_DMA(&huart2 , fullMessageBuffer, fullMessageLength+2+6);
                     
                     for(int z=0;z<fullMessageLength+2+6;++z)
                     {
                         rewriteMessagesBuffer[z+rewriteMessagesCounter]=fullMessageBuffer[z];
                     }
                     rewriteMessagesCounter+=fullMessageLength+2+6;
-                    //  waitedRewrite();
-                    
-                    
-                    //				  rewrite(fullMessageBuffer, fullMessageLength+2+6);
+
                 }
-                else if(transmittedByte)
+                else if(thirdCommand)
                 {
                     
-                    HAL_UART_Transmit(&huart2 , nothingToSendMessage, 8,1);//отправляем статус ок
+                    HAL_UART_Transmit(&huart2 , testCommand, 8,1);
                     
                     for(int z=0;z<fullMessageLength+2+6;++z)
                     {
@@ -619,12 +573,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
                     }
                     for(int z=0;z<8;++z)
                     {
-                        rewriteMessagesBuffer[z+rewriteMessagesCounter]=nothingToSendMessage[z];
+                        rewriteMessagesBuffer[z+rewriteMessagesCounter]=testCommand[z];
                     }
                     rewriteMessagesCounter+=fullMessageLength+2+6+8;
-                    //  waitedRewrite();
-                    //				  rewrite(nothingToSendMessage, 8);
-                    //				  rewrite(fullMessageBuffer, fullMessageLength+2+6);
+
                 }
             }
             fullMessageLength = 0;

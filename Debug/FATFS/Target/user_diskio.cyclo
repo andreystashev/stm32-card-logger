@@ -1,5 +1,0 @@
-user_diskio.c:84:9:USER_initialize	2
-user_diskio.c:104:9:USER_status	2
-user_diskio.c:126:9:USER_read	6
-user_diskio.c:169:9:USER_write	7
-user_diskio.c:211:9:USER_ioctl	6
