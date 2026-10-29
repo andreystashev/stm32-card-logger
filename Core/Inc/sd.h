@@ -8,7 +8,7 @@
 
 //UART: A9 A10
 //SD Module
-//CS - A3
+//CS - A4
 //SCK - B13
 //MOSI - B15
 //MOSO - B14
@@ -28,7 +28,7 @@
 //--------------------------------------------------
 //макросы для светодиода
 #define CS_SD_GPIO_PORT GPIOA
-#define CS_SD_PIN GPIO_PIN_3
+#define CS_SD_PIN GPIO_PIN_4
 #define SS_SD_SELECT() HAL_GPIO_WritePin(CS_SD_GPIO_PORT, CS_SD_PIN, GPIO_PIN_RESET)
 #define SS_SD_DESELECT() HAL_GPIO_WritePin(CS_SD_GPIO_PORT, CS_SD_PIN, GPIO_PIN_SET)
 #define LD_ON HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET); //RED
