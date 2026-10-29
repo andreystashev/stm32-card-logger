@@ -86,7 +86,8 @@ DSTATUS USER_initialize (
 )
 {
   /* USER CODE BEGIN INIT */
-    //Stat = STA_NOINIT;
+    if (pdrv) return STA_NOINIT;
+    Stat = STA_NOINIT;
 #if DEBUG
     HAL_UART_Transmit(&huart1,(uint8_t*)"USER_initialize\r\n",17,0x1000);
 #endif
@@ -137,23 +138,20 @@ DRESULT USER_read (
 	sprintf(str1,"sector: %lu; count: %d\r\n",sector, count);
 	HAL_UART_Transmit(&huart1,(uint8_t*)str1,strlen(str1),0x1000);
 #endif
-	if (pdrv || !count) return RES_PARERR;
+	if (pdrv || !count || !buff) return RES_PARERR;
 	if (Stat & STA_NOINIT) return RES_NOTRDY;
-	if (!(sdinfo.type & CT_BLOCK)) sector *= 512; /* Convert to byte address if needed */
-	if (count == 1) /* Single block read */
+	const DWORD stride = (sdinfo.type & CT_BLOCK) ? 1 : 512;
+	if (!(sdinfo.type & CT_BLOCK)) sector *= 512;
+	while (count > 0)
 	{
-	  SD_Read_Block(buff,sector); //Считаем блок в буфер
-	  count = 0;
+	    if (SD_Read_Block(buff, sector) != 0) break;
+	    buff += 512;
+	    sector += stride;
+	    count--;
 	}
-	else /* Multiple block read */
-	{
-
-	}
-
+	SS_SD_DESELECT();
 	SPI_Release();
-
 	return count ? RES_ERROR : RES_OK;
-//    return RES_OK;
   /* USER CODE END READ */
 }
 
@@ -180,19 +178,19 @@ DRESULT USER_write (
 	sprintf(str1,"sector: %lu\r\n",sector);
 	HAL_UART_Transmit(&huart1,(uint8_t*)str1,strlen(str1),0x1000);
 #endif
-	if (pdrv || !count) return RES_PARERR;
+	if (pdrv || !count || !buff) return RES_PARERR;
 	if (Stat & STA_NOINIT) return RES_NOTRDY;
 	if (Stat & STA_PROTECT) return RES_WRPRT;
-	if (!(sdinfo.type & CT_BLOCK)) sector *= 512; /* Convert to byte address if needed */
-	if (count == 1) /* Single block read */
+	const DWORD stride = (sdinfo.type & CT_BLOCK) ? 1 : 512;
+	if (!(sdinfo.type & CT_BLOCK)) sector *= 512;
+	while (count > 0)
 	{
-		SD_Write_Block((BYTE*)buff,sector); //Считаем блок в буфер
-		count = 0;
+	    if (SD_Write_Block((BYTE *)buff, sector) != 0) break;
+	    buff += 512;
+	    sector += stride;
+	    count--;
 	}
-	else /* Multiple block read */
-	{
-	}
-
+	SS_SD_DESELECT();
 	SPI_Release();
 	return count ? RES_ERROR : RES_OK;
 
@@ -232,12 +230,14 @@ DRESULT USER_ioctl (
 		res = RES_OK;
 		break;
 	  case GET_SECTOR_SIZE : /* Get sectors on the disk (WORD) */
+		if (buff == NULL) return RES_PARERR;
 		*(WORD*)buff = 512;
 		res = RES_OK;
 		break;
 	  default:
 		res = RES_PARERR;
 	}
+	SS_SD_DESELECT();
 	SPI_Release();
 	return res;
   /* USER CODE END IOCTL */

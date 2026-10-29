@@ -140,7 +140,7 @@ uint8_t SD_Write_Block (uint8_t *buff, uint32_t lba)
   SPI_Release(); //Пропустим котрольную сумму
   SPI_Release();
   result=SPI_ReceiveByte();
-  if ((result&0x05)!=0x05) return 6; //Выйти, если результат не 0x05 (Даташит стр 111)
+  if ((result&0x1F)!=0x05) return 6; //Выйти, если результат не 0x05 (Даташит стр 111)
   cnt=0;
   do { //Ждем окончания состояния BUSY
     result=SPI_ReceiveByte();
@@ -167,8 +167,6 @@ uint8_t sd_ini(void)
 	SS_SD_DESELECT();
 	for(i=0;i<10;i++) //80 импульсов (не менее 74) Даташит стр 91
 		SPI_Release();
-	hspi2.Init.BaudRatePrescaler = temp;
-	HAL_SPI_Init(&hspi2);
 	SS_SD_SELECT();
 	if (SD_cmd(CMD0, 0) == 1) // Enter Idle state
 	{
@@ -211,13 +209,13 @@ uint8_t sd_ini(void)
 				sdinfo.type = 0;
 		}
 	}
-	else
-	{
-		return 1;
-	}
 #if DEBUG
 	sprintf(str1,"Type SD: 0x%02X\r\n",sdinfo.type);
 	HAL_UART_Transmit(&huart1,(uint8_t*)str1,strlen(str1),0x1000);
 #endif
-	return 0;
+	SS_SD_DESELECT();
+	SPI_Release();
+	hspi2.Init.BaudRatePrescaler = temp;
+	HAL_SPI_Init(&hspi2);
+	return sdinfo.type == 0 ? 1 : 0;
 }
