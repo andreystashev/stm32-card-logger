@@ -101,6 +101,7 @@ Run the hardware-independent regression checks with a C99 compiler:
 They check packet bounds, request/reply log ordering, atomic rejection when a
 buffer is full, SD data-response decoding, initialization failure, and the FatFs
 disk adapter's block/byte addressing, multi-sector loops, and error propagation.
+GitHub Actions runs these same host checks on pushes and pull requests.
 The SD/HAL interfaces are mocked; these checks do not verify a physical card,
 UART timing, flashing, or a complete ARM firmware build.
 
